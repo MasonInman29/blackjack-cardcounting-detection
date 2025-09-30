@@ -1,5 +1,6 @@
-from dataset import BlackjackDataset, GameSimulator, game_simulator
-from model import NaiveStrategy
+from dataset import BlackjackDataset, GameSimulator
+from model import NaiveStrategy, BasicStrategyModel, HILO
+from tqdm import tqdm
 
 
 def calculate_accuracy(dataset, model, split_name='test'):
@@ -31,7 +32,9 @@ def calculate_accuracy(dataset, model, split_name='test'):
             remaining_cards=row['remaining_card_counts']
         )
 
-    print(f"Generating predictions for '{split_name}' split...")
+    print(f"\n--- Evaluation on {split_name} split ---")
+    # print(f"Generating predictions for '{split_name}' split...")
+    tqdm.pandas(desc=f"Generating predictions for '{split_name}' split...")
     predictions = df_split.progress_apply(get_prediction, axis=1)
 
     # Compare predictions to the optimal action determined by EV
@@ -43,8 +46,22 @@ def calculate_accuracy(dataset, model, split_name='test'):
         return 0.0
 
     accuracy = correct_predictions / total_predictions
-    # print(f"Model accuracy on '{split_name}' split: {accuracy:.4f} ({correct_predictions}/{total_predictions})")
+    print(f"Model accuracy: {accuracy:.4f} ({correct_predictions}/{total_predictions})")
     return accuracy
+
+
+def evaluate_model(model, dataset, game_simulator, num_simulations=100):
+    # Calculate accuracy on the test split
+    accuracy = calculate_accuracy(dataset, model, split_name='test')
+    
+    # Set the model in the game simulator
+    game_simulator.set_model(model)
+    
+    # Run simulations to calculate average EV
+    average_ev = game_simulator.run_multiple_simulations(num_games=num_simulations)
+    
+    # print(f"Model evaluation complete. Accuracy: {accuracy:.4f}, Average EV: {average_ev:.4f}")
+    # return accuracy, average_ev
 
 
 if __name__ == "__main__":
@@ -52,15 +69,27 @@ if __name__ == "__main__":
     dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=100, num_data_limit=1000) 
     # download 'blackjack_simulator.csv' from https://www.kaggle.com/datasets/dennisho/blackjack-hands/data
     # use a small num_data_limit for debugging.
+    
+    # Initialize game simulator, following the same settings as Kaggle dataset
+    game_simulator = GameSimulator(num_decks=8, deck_penetration=6.5)
 
-    # Initialize model
+    # Naive Strategy model
     model = NaiveStrategy()
+    print("\n\n------------------------------")
+    print("Evaluating Naive Strategy model...")
+    evaluate_model(model, dataset, game_simulator, num_simulations=10000)
     
-    # Calculate accuracy on test split
-    test_accuracy = calculate_accuracy(dataset, model, split_name='test')
-    print(f"Test Accuracy: {test_accuracy:.4f}")
+    
+    # Basic Strategy model
+    model = BasicStrategyModel()
+    print("\n\n------------------------------")
+    print("Evaluating Basic Strategy model...")
+    evaluate_model(model, dataset, game_simulator, num_simulations=10000)
     
     
-    # Calculate average EV by running simulations
-    game_simulator = GameSimulator(model=model)
-    average_ev = game_simulator.run_multiple_simulations(num_games=10, num_decks=8, deck_penetration=6.5)
+    # Hi-Lo model
+    model = HILO(num_decks=8, bet_spread=10)
+    print("\n\n------------------------------")
+    print("Evaluating Hi-Lo model...")
+    evaluate_model(model, dataset, game_simulator, num_simulations=10000)
+    

@@ -10,3 +10,7 @@ class NaiveStrategy:
             return 'S'
         else:
             return 'H'
+    
+    def get_bet_size(self, remaining_cards):
+        """Always bets the table minimum."""
+        return 1.0

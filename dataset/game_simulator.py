@@ -7,46 +7,46 @@ class GameSimulator:
     Simulates full games of blackjack using a provided model to make decisions.
     """
 
-    def __init__(self, model):
-        """
-        Initializes the GameSimulator.
-
-        Args:
-            model: A model object with a `predict(player_hand, dealer_up_card, remaining_cards)` method.
-        """
-        if not hasattr(model, 'predict'):
-            raise TypeError("The provided model must have a 'predict' method.")
-        self.model = model
+    def __init__(self, num_decks=8, deck_penetration=6.5):
         self.card_values = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11]
+        self.num_decks = num_decks
+        self.deck_penetration = deck_penetration
+        self.model = None  # Model should be set using set_model method
 
-    def _create_shoe(self, num_decks=8):
+    def _create_shoe(self):
         """Creates and shuffles a shoe with the specified number of decks."""
-        shoe = self.card_values * 4 * num_decks
+        shoe = self.card_values * 4 * self.num_decks
         np.random.shuffle(shoe)
         return shoe
+    
+    def set_model(self, model):
+        self.model = model
+        
+    def set_deck_info(self, num_decks, deck_penetration):
+        self.num_decks = num_decks
+        self.deck_penetration = deck_penetration
 
-    def simulate_one_game(self, num_decks=8, deck_penetration=6.5):
+    def simulate_one_game(self):
         """
         Simulates one full shoe of blackjack.
-
-        Args:
-            deck_penetration (float): The number of decks to be played before shuffling.
-
-        Returns:
-            float: The total winnings or losses for the simulated shoe.
         """
-        shoe = self._create_shoe(num_decks)
+        shoe = self._create_shoe()
         total_winnings = 0
         
         # Determine the cut-off point based on penetration
-        cards_in_shoe = num_decks * 52
-        cut_off = cards_in_shoe - int(deck_penetration * 52)
+        cards_in_shoe = self.num_decks * 52
+        cut_off = cards_in_shoe - int(self.deck_penetration * 52)
 
         while len(shoe) > cut_off:
             bet = 1.0
             
             # Not enough cards for a full hand
             if len(shoe) < 4: break
+            
+            # Before dealing, get bet size from model if available
+            remaining_cards = {val: shoe.count(val) for val in self.card_values}
+            bet_size = self.model.get_bet_size(remaining_cards)
+            bet *= bet_size
 
             # --- Dealing ---
             player_hand = [shoe.pop(), shoe.pop()]
@@ -88,7 +88,9 @@ class GameSimulator:
                     if len(player_hand) == 2:
                         bet *= 2.0
                         player_hand.append(shoe.pop())
-                        break
+                        if get_hand_value(player_hand) > 21:
+                            player_busted = True
+                            break
                     else: # Cannot double after hitting, treat as hit
                         action = 'H'
 
@@ -121,26 +123,26 @@ class GameSimulator:
 
         return total_winnings
 
-    def run_multiple_simulations(self, num_games=100, num_decks=8, deck_penetration=6.5):
+    def run_multiple_simulations(self, num_games=100):
         """
         Runs multiple game simulations and computes the average result.
-
-        Args:
-            num_games (int): The number of full shoes to simulate.
-            deck_penetration (float): The deck penetration for each game.
-
-        Returns:
-            float: The average EV (winnings/losses) per shoe.
         """
+        if self.model is None:
+            raise ValueError("Model not set. Please set a model using set_model() before running simulations.")
+        
+        print("\n--- Full Simulation ---")
         print(f"Running {num_games} simulations...")
         results = []
-        for _ in tqdm(range(num_games), desc="Simulating Games"):
-            result = self.simulate_one_game(num_decks, deck_penetration)
+        for i in tqdm(range(num_games), desc="Simulating Games"):
+            # Set a seed for each game to ensure the card order is the same
+            # when testing different models on the same simulation number.
+            np.random.seed(i)
+            result = self.simulate_one_game()
             results.append(result)
+
 
         average_ev = np.mean(results)
         
-        print("\n--- Simulation Results ---")
         print(f"Total shoes simulated: {num_games}")
         print(f"Average Winnings/Losses (EV) per shoe: {average_ev:.4f} units")
         

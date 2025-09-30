@@ -4,8 +4,6 @@ import ast # Used to safely evaluate string-formatted lists
 from tqdm import tqdm
 from helper import get_hand_value
 
-tqdm.pandas(desc="Calculating Action EVs")
-
 class BlackjackDataset:
     """
     A class to load, process, and split the blackjack hands dataset.
@@ -157,6 +155,7 @@ class BlackjackDataset:
         df = self._calculate_remaining_cards(df)
         
         print("Calculating Expected Value for each possible action. This may take a while...")
+        tqdm.pandas(desc="Calculating Action EVs")
         action_evs = df.progress_apply(
             lambda row: self._run_monte_carlo_simulation(
                 row['initial_hand'], row['dealer_up'], row['remaining_card_counts']
