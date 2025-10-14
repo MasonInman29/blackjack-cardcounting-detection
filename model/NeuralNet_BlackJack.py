@@ -1,8 +1,7 @@
 import pickle
 import pandas as pd
 from sklearn.pipeline import Pipeline
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from Hit_By_Hit_Transformer import Hit_By_Hit_Transformer
@@ -12,11 +11,11 @@ from dataset.dataset import CSVDataset
 from eval_model import evaluate_model
 
 
-class SVM_BlackJack:
+class NN_BlackJack:
     """
-    Class for an SVM Hit/Stay classifier.
+    Class for a Deep Neural Network Hit/Stay classifier.
     """
-    def __init__(self, kernel="rbf"):
+    def __init__(self, hidden_layer_sizes=(256, 128, 64, 32, 16), activation='relu', solver='adam', max_iter=1000):
         """
         Creates a pipeline for the hit/stay classifier
         """
@@ -40,13 +39,17 @@ class SVM_BlackJack:
                 ("NineFrequency", "passthrough", ["NineFrequency"]),
                 ("TenFrequency", "passthrough", ["TenFrequency"]),
             ])),
-            ("svm", SVC(kernel=kernel, probability=True)),
+            ("mlp", MLPClassifier(hidden_layer_sizes=hidden_layer_sizes,
+                                  activation=activation,
+                                  solver=solver,
+                                  max_iter=max_iter,
+                                  random_state=42)),
         ])
         self.fitted = False
 
     def fit(self, X, y):
         """
-        Trains an ensemble SVM on the Kaggle Dataset with EVs
+        Trains a deep neural network on the Kaggle Dataset with EVs
         :param X: The dataset from Kaggle with computed EVs
         :param y: The labels of the highest EV
         """
@@ -102,13 +105,13 @@ if __name__ == "__main__":
     test_y = test_X["best_action_by_ev"]
 
     print("Beginning Training")
-    svm = SVM_BlackJack()
-    svm.fit(train_X, train_y)
+    nn = NN_BlackJack()
+    nn.fit(train_X, train_y)
     print("Done Training")
 
-    filepath = "svm_2000sim_3000000samples.pkl"
+    filepath = "nn_2000sim_3000000samples.pkl"
     with open(filepath, "wb") as file:
-        pickle.dump(svm, file)
+        pickle.dump(nn, file)
 
     game_simulator = GameSimulator()
-    evaluate_model(svm, dataset, game_simulator, num_simulations=1000)
+    evaluate_model(nn, dataset, game_simulator, num_simulations=1000)

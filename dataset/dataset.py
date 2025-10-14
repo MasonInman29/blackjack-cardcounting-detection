@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
-import ast # Used to safely evaluate string-formatted lists
+import ast
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from helper import get_hand_value
 
@@ -34,7 +35,6 @@ class BlackjackDataset:
         self.train_split_ratio = train_split
         self.val_split_ratio = val_split
         self.num_simulations = num_simulations
-
         self.df = self._load_and_process_data(num_data_limit)
         self.train_df, self.val_df, self.test_df = self._split_data()
 
@@ -206,6 +206,45 @@ class BlackjackDataset:
         else: raise ValueError("Invalid split name. Choose from 'train', 'val', or 'test'.")
 
 
+class CSVDataset:
+    def __init__(self, nrows=3000000):
+        print("Loading Dataset")
+        schema = {
+            "shoe_id": int,
+            "cards_remaining": int,
+            "dealer_up": int,
+            "run_count": int,
+            "true_count": int,
+            "dealer_final_value": lambda x: 21 if x == "BJ" else int(x),
+            "win": float,
+            "initial_hand": lambda x: [int(i) for i in ast.literal_eval(x)],
+            "dealer_final": lambda x: [int(i) for i in ast.literal_eval(x)],
+            "player_final": lambda x: [[int(j) for j in i] for i in ast.literal_eval(x)],
+            "player_final_value": lambda x: [
+                21 if v == "'BJ'" or v == "BJ" else int(v)
+                for v in ast.literal_eval(x)
+            ],
+            "actions_taken": lambda x: [[str(j) for j in i] for i in ast.literal_eval(x)],
+            "action_evs": lambda x: {str(k): float(v) for k, v in ast.literal_eval(x).items()},
+            "best_action_by_ev": str,
+            "remaining_card_counts": lambda x: {int(k): int(v) for k, v in ast.literal_eval(x).items()},
+        }
+
+        self.df = pd.read_csv("blackjack_labeled_simulations.csv", dtype=str, nrows=nrows)
+
+        for col, parser in schema.items():
+            self.df[col] = self.df[col].apply(parser)
+
+        print("Dataset loaded")
+
+    def get_split(self, split_name="train"):
+        if split_name == "train":
+            return train_test_split(self.df, train_size=.8, random_state=42)[0]
+        elif split_name == "test":
+            return train_test_split(self.df, train_size=.8, random_state=42)[1]
+        else:
+            raise ValueError("Invalid split name. Must be 'train' or 'test'.")
+
 if __name__== "__main__":
     # Example usage
     dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=100, num_data_limit=1000) 
@@ -216,7 +255,6 @@ if __name__== "__main__":
     train_data = dataset.get_split('train')
     val_data = dataset.get_split('val')
     test_data = dataset.get_split('test')
-    
     print(f"Train data sample:\n{train_data.head()}")
     print(f"Validation data sample:\n{val_data.head()}")
     print(f"Test data sample:\n{test_data.head()}")
