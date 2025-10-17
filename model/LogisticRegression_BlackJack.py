@@ -8,7 +8,12 @@ from Hit_By_Hit_Transformer import Hit_By_Hit_Transformer
 from dataset import GameSimulator
 from dataset.dataset import CSVDataset
 from eval_model import evaluate_model
+from datetime import datetime
+import os, eval_model
 
+run_dir = os.path.join('figures', 'LogisticRegression_BlackJack', datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
+os.makedirs(run_dir, exist_ok=True)
+eval_model.OUTPUT_DIR = run_dir
 
 class LogisticRegression_BlackJack:
 
