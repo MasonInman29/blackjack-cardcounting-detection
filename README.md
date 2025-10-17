@@ -98,4 +98,16 @@ Notes:
 - Add other game mechanics (insurance)
 - Add UI
 - Automatic data download and usage
+- Models
+  - Logistic regression
+  - XG boost
+  - Reinforcement learning
+- Labels
+  - Outcome Labels
+  - Advantage opportunity label
+- Splits and insurance
+- Add precision and recall
+- Sequence classifer
+- Counter probability
+- Running true counts that persist for the session
 - 
