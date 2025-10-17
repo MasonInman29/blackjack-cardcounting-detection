@@ -87,6 +87,11 @@ Notes:
 - `HILO` deviations reflect a subset of common index plays; scope is adjustable.
 - Simulator uses standard dealer rules (hit soft-17 handled) and simple bet sizing APIs.
 
+## Example output:
+### LR
+<img width="3203" height="1763" alt="accuracy_by_player_total_LogisticRegression_BlackJack" src="https://github.com/user-attachments/assets/54f65af5-4036-4f62-b3f8-9ea98f15f8ad" />
+<img width="1809" height="1763" alt="confusion_matrix_LogisticRegression_BlackJack" src="https://github.com/user-attachments/assets/7bf93032-9da9-4c77-86c8-46ba1f168fb5" />
+<img width="4162" height="1763" alt="simulation_results_LogisticRegression_BlackJack" src="https://github.com/user-attachments/assets/8a910db0-a8e5-4473-9cbb-5b9dea2e3953" />
 
 
 
