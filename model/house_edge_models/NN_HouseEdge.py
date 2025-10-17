@@ -67,7 +67,7 @@ class NN_HouseEdge:
                 early_stop = EarlyStopping(monitor='val_loss', patience=100, restore_best_weights=True, verbose=0)
                 nn_model.fit(X_train_scaled, y_train,
                              validation_data=(X_val_scaled, y_val),
-                             epochs=1,
+                             epochs=1000,
                              batch_size=32,
                              callbacks=[early_stop],
                              verbose=1)
