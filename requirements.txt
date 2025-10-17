@@ -1,0 +1,9 @@
+pandas~=2.3.3
+numpy~=2.0.1
+scikit-learn~=1.7.2
+torch~=2.9.0
+tensorflow~=2.19.1
+tqdm~=4.67.1
+kagglehub~=0.2.7
+matplotlib~=3.10.6
+seaborn~=0.13.2
