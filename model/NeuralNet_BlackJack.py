@@ -9,16 +9,28 @@ import numpy as np
 from dataset import GameSimulator
 from dataset.dataset import CSVDataset
 from eval_model import evaluate_model
-
+from house_edge_models.NN_HouseEdge import NN_HouseEdge
 
 class NN_BlackJack:
     """
     Class for a Deep Neural Network Hit/Stay classifier.
     """
-    def __init__(self, hidden_layer_sizes=(256, 128, 64, 32, 16), activation='relu', solver='adam', max_iter=1000):
+    def __init__(self, hidden_layer_sizes=(256, 128, 64, 32, 16), activation='relu', solver='adam', max_iter=10, load=False):
         """
         Creates a pipeline for the hit/stay classifier
         """
+
+        if load:
+            filepath = "nn_2000sim_3000000samples.pkl"
+            with open(filepath, "rb") as file:
+                nn = pickle.load(file)
+                self.analyzers = nn.analyzers
+                self.le = nn.le
+                self.pipeline = nn.pipeline
+                self.fitted = nn.fitted
+                return
+    
+        self.analyzers = NN_HouseEdge("house_edge_models/train.csv")
         self.le = LabelEncoder()
         self.pipeline = Pipeline([
             ("transformed_data", Hit_By_Hit_Transformer()),
@@ -95,23 +107,41 @@ class NN_BlackJack:
 
     def get_bet_size(self, remaining_cards):
         """Always bets the table minimum."""
+        input = pd.DataFrame([{
+                                1: remaining_cards[11],
+                                2: remaining_cards[2],
+                                3: remaining_cards[3],
+                                4: remaining_cards[4],
+                                5: remaining_cards[5],
+                                6: remaining_cards[6],
+                                7: remaining_cards[7],
+                                8: remaining_cards[8],
+                                9: remaining_cards[9],
+                                10: remaining_cards[10]
+        }])
+        house_edge_predictions = []
+        for analyzer in self.analyzers.nn_models:
+            house_edge_predictions.append(analyzer.predict(input))
+        house_edge = np.mean(house_edge_predictions)
+        if house_edge > 0:
+            return 1000.0
         return 1.0
 
 if __name__ == "__main__":
     dataset = CSVDataset()
     train_X = dataset.get_split("train")
     train_y = train_X["best_action_by_ev"]
-    test_X = dataset.get_split("test")
-    test_y = test_X["best_action_by_ev"]
 
-    print("Beginning Training")
+
     nn = NN_BlackJack()
-    nn.fit(train_X, train_y)
-    print("Done Training")
+    if not nn.fitted:
+        print("Beginning Training")
+        nn.fit(train_X, train_y)
+        print("Done Training")
 
-    filepath = "nn_2000sim_3000000samples.pkl"
-    with open(filepath, "wb") as file:
-        pickle.dump(nn, file)
+    # filepath = "nn_2000sim_3000000samples.pkl"
+    # with open(filepath, "wb") as file:
+    #     pickle.dump(nn,file)
 
     game_simulator = GameSimulator()
     evaluate_model(nn, dataset, game_simulator, num_simulations=1000)
