@@ -200,10 +200,14 @@ class BlackjackDataset:
         return train_df, val_df, test_df
 
     def get_split(self, split_name='train'):
-        if split_name == 'train': return self.train_df
-        elif split_name == 'val': return self.val_df
-        elif split_name == 'test': return self.test_df
-        else: raise ValueError("Invalid split name. Choose from 'train', 'val', or 'test'.")
+        if split_name == 'train': 
+            return self.train_df
+        elif split_name == 'val': 
+            return self.val_df
+        elif split_name == 'test': 
+            return self.test_df
+        else: 
+            raise ValueError("Invalid split name. Choose from 'train', 'val', or 'test'.")
 
 
 class CSVDataset:
@@ -244,6 +248,33 @@ class CSVDataset:
             return train_test_split(self.df, train_size=.8, random_state=42)[1]
         else:
             raise ValueError("Invalid split name. Must be 'train' or 'test'.")
+        
+        
+class ParquetDataset:
+    def __init__(self, nrows=None):
+        print("Loading Dataset from Parquet...")
+        
+        df = pd.read_parquet("blackjack_simulations.parquet")
+        
+        if nrows is not None:
+            self.df = df.iloc[:nrows]
+        else:
+            self.df = df
+            
+        self.df['remaining_card_counts'] = self.df['remaining_card_counts'].apply(
+            lambda string_key_dict: {int(k): v for k, v in string_key_dict.items()}
+        )
+
+        print("Dataset loaded.")
+        
+    def get_split(self, split_name="train"):
+        if split_name == "train":
+            return train_test_split(self.df, train_size=.8, random_state=42)[0]
+        elif split_name == "test":
+            return train_test_split(self.df, train_size=.8, random_state=42)[1]
+        else:
+            raise ValueError("Invalid split name. Must be 'train' or 'test'.")
+
 
 if __name__== "__main__":
     # Example usage

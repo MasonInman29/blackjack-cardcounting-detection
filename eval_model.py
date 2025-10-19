@@ -1,5 +1,5 @@
-from dataset import BlackjackDataset, GameSimulator
-from model import NaiveStrategy, BasicStrategyModel, HILO
+from dataset import BlackjackDataset, GameSimulator, CSVDataset, ParquetDataset
+from model import NaiveStrategy, BasicStrategyModel, HILO, RLModel
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -392,12 +392,15 @@ def evaluate_model(model, dataset, game_simulator, num_simulations=100):
 
 if __name__ == "__main__":
     # Load dataset
-    dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=100, num_data_limit=1000) 
+    dataset = ParquetDataset()
+    
+    # dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=100, num_data_limit=1000) 
     # download 'blackjack_simulator.csv' from https://www.kaggle.com/datasets/dennisho/blackjack-hands/data
     # use a small num_data_limit for debugging.
     
     # Generate dataset visualizations
     print("\nGenerating dataset visualizations...")
+    plot_action_distribution(dataset, split='train')
     plot_action_distribution(dataset, split='test')
     plot_ev_by_action(dataset, split='test')
     
@@ -407,7 +410,7 @@ if __name__ == "__main__":
     # Store results for comparison
     results_dict = {}
 
-    NUM_TEST_SIMS = 1000
+    NUM_TEST_SIMS = 10000
     # Naive Strategy model
     model = NaiveStrategy()
     print("\n\n------------------------------")
@@ -425,11 +428,17 @@ if __name__ == "__main__":
     
     
     # Hi-Lo model
-    model = HILO(num_decks=8, bet_spread=100)
+    model = HILO(num_decks=8, bet_spread=20)
     print("\n\n------------------------------")
     print("Evaluating Hi-Lo model...")
     accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
     results_dict['Hi-Lo Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    
+    # RL model
+    # model = RLModel(num_decks=8, bet_spread=20)
+    # model.load_model('blackjack_rl_model_10181738.pkl')
+    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['RL Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     # Generate comparison plot
     print("\n\nGenerating model comparison plot...")

@@ -209,3 +209,6 @@ __marimo__/
 *csv
 *.json
 figures/
+*.pkl
+*.parquet
+*.png
