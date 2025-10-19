@@ -17,7 +17,7 @@ class RLModel:
                  discount_factor=0.95, 
                  epsilon_start=1.0, 
                  epsilon_end=0.01, 
-                 epsilon_decay=0.99995):
+                 epsilon_decay=0.99999885):
         
         self.num_decks = num_decks
         self.bet_spread = float(bet_spread)

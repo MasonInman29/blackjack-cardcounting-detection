@@ -352,12 +352,14 @@ if __name__ == '__main__':
     # How often to check progress during training
     PROGRESS_CHUNK_SIZE = 10000
     PROGRESS_EVAL_SHOES = 1000
+    
+    SAVE_INTERVAL = 100000
 
     # --- Initialize Models and Simulator ---
     rl_model = RLModel(
         num_decks=NUM_DECKS,
         bet_spread=MAX_BET_SPREAD,
-        epsilon_decay=0.999995 # Slower decay for more exploration
+        epsilon_decay=0.99999885
     )
     baseline_model = HILO(num_decks=NUM_DECKS, bet_spread=MAX_BET_SPREAD)
     
@@ -400,6 +402,29 @@ if __name__ == '__main__':
             
             # Restore epsilon to continue training
             rl_model.epsilon = original_epsilon
+            
+            print("\n--- Generating Training Plot ---")
+            plt.figure(figsize=(12, 7))
+            plt.plot(shoes_axis, training_progress, marker='o', linestyle='-', label='RL Model EV')
+            
+            # Add a horizontal line for the baseline EV
+            # plt.axhline(y=baseline_ev, color='r', linestyle='--', label=f'Baseline EV ({baseline_ev:.4f})')
+            
+            plt.title('RL Model Training Progress vs. Baseline')
+            plt.xlabel('Number of Training Shoes')
+            plt.ylabel('Average Winnings (EV) per Shoe (units)')
+            plt.grid(True)
+            plt.legend()
+            plt.tight_layout()
+            
+            plot_filename = 'training_progress.png'
+            plt.savefig(plot_filename)
+            print(f"Plot saved as {plot_filename}")
+            
+            if (i + 1) % SAVE_INTERVAL == 0:
+                print(f"\n--- Saving Model at Shoe {i+1} ---")
+                cur_file_path = f"blackjack_rl_model_shoe_{i+1}.pkl"
+                rl_model.save_model(cur_file_path)
 
     print("\n--- Training Complete ---")
     rl_model.save_model(MODEL_FILE_PATH)

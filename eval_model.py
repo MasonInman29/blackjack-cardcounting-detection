@@ -132,7 +132,7 @@ def plot_true_count_analysis(game_simulator, model, model_name='Model', num_game
         cut_off = cards_in_shoe - int(game_simulator.deck_penetration * 52)
         
         while len(shoe) > cut_off and len(shoe) >= 4:
-            remaining_cards = {val: shoe.count(val) for val in game_simulator.card_values}
+            remaining_cards = game_simulator.get_remaining_cards(shoe)
             tc = model._get_true_count(remaining_cards)
             bet = model.get_bet_size(remaining_cards)
             
