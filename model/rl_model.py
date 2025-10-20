@@ -22,17 +22,20 @@ class RLModel:
         self.num_decks = num_decks
         self.bet_spread = float(bet_spread)
         
-        # --- Hi-Lo Count State (copied from HILO for state representation) ---
         self.initial_low_cards = 20 * self.num_decks # (2, 3, 4, 5, 6)
         self.initial_high_cards = 20 * self.num_decks # (10, J, Q, K, A)
 
         # --- RL Parameters ---
         self.lr = learning_rate
+        self.bet_lr = 1e-6
         self.gamma = discount_factor
         self.epsilon = epsilon_start
         self.epsilon_start = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
+        
+        
+        self.baseline_model = None
 
         # --- Q-tables ---
         # 1. Q-table for playing decisions:
@@ -46,13 +49,41 @@ class RLModel:
         self.bet_q_table = {}
         
         # --- Bet Action Space ---
-        self.bet_actions = [1.0]
-        bet = 2.0
-        while bet < self.bet_spread:
-            self.bet_actions.append(bet)
-            bet *= 2.0
-        if self.bet_spread not in self.bet_actions:
-             self.bet_actions.append(self.bet_spread)
+        self.bet_actions = [float(x) for x in range(1, int(round(self.bet_spread)) + 1)]
+        print(f"Bet actions: {self.bet_actions}")
+        # bet = 2.0
+        # while bet < self.bet_spread:
+        #     self.bet_actions.append(bet)
+        #     bet *= 2.0
+        # if self.bet_spread not in self.bet_actions:
+        #      self.bet_actions.append(self.bet_spread)
+             
+    def initialize_q_table_from_hilo(self):
+        print("Initializing Q-table with Hi-Lo expert policy...")
+        
+        for player_total in range(4, 22):
+            for dealer_up_card in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]:
+                for is_soft in [True, False]:
+                    for can_split in [True, False]:
+                        for can_double_surrender in [True, False]:
+                            for tc_bucket in range(-20, 20):
+                                
+                                state = (player_total, dealer_up_card, is_soft, can_split, can_double_surrender, tc_bucket)
+                                
+                                valid_actions = self._get_valid_actions(state)
+                                if not valid_actions:
+                                    continue
+                                    
+                                optimal_action = self.baseline_model.predict_v2(player_total, dealer_up_card, is_soft, can_split, can_double_surrender, tc_bucket)
+                                    
+                                self.q_table[state] = {}
+                                for action in valid_actions:
+                                    if action == optimal_action:
+                                        self.q_table[state][action] = 1.0 
+                                    else:
+                                        self.q_table[state][action] = -1.0
+        
+        print(f"Q-table initialized with {len(self.q_table)} expert states.")
 
     # --- State Representation Methods ---
 
@@ -75,8 +106,8 @@ class RLModel:
     def _get_bet_state(self, remaining_cards):
         """Returns a hashable state for the betting decision."""
         tc = self._get_true_count(remaining_cards)
-        # Discretize the true count into integer buckets
-        return int(round(tc))
+        tc = int(round(tc * 4)) / 4 # Round to nearest 0.25
+        return tc
     
     def transform_hand(self, hand):
         """Converts J, Q, K (21, 22, 23) to 10 for value calculation."""
@@ -136,7 +167,9 @@ class RLModel:
         Predicts the best action using the learned Q-table (policy).
         Uses epsilon-greedy for exploration during training.
         """
+        return self.baseline_model.predict(player_hand, dealer_up_card, remaining_cards)
         state = self._get_play_state(player_hand, dealer_up_card, remaining_cards)
+        
         player_hand = self.transform_hand(player_hand)
         valid_actions = self._get_valid_actions(state)
         
@@ -199,7 +232,6 @@ class RLModel:
     def update_bet(self, bet_state_tuple, bet_action, total_hand_reward):
         """
         Updates the betting Q-table with the final reward for the hand.
-        Your simulator must call this ONCE at the end of the entire hand.
         
         'total_hand_reward' should be the total profit/loss for that hand, 
         e.g., +10, -10, +15.
@@ -207,13 +239,15 @@ class RLModel:
         # Ensure Q-values are initialized
         self._get_q_values(self.bet_q_table, bet_state_tuple, self.bet_actions)
         
-        old_q = self.bet_q_table[bet_state_tuple][bet_action]
+        # old_q = self.bet_q_table[bet_state_tuple][bet_action]
+        # new_q = old_q + self.bet_lr * (total_hand_reward - old_q)
         
-        # This is a Monte Carlo update: Q(s,a) = Q(s,a) + lr * (Reward - Q(s,a))
-        # The Q-value will learn the *expected final profit* for making that bet.
-        new_q = old_q + self.lr * (total_hand_reward - old_q)
-        
-        self.bet_q_table[bet_state_tuple][bet_action] = new_q
+        bet_unit = total_hand_reward / bet_action
+        for action in self.bet_actions:
+            tmp_hand_reward = bet_unit * action
+            old_q = self.bet_q_table[bet_state_tuple][action]
+            new_q = old_q + self.bet_lr * (tmp_hand_reward - old_q)
+            self.bet_q_table[bet_state_tuple][action] = new_q
 
     def decay_epsilon(self):
         """Call this at the end of each episode (e.g., each shoe)."""

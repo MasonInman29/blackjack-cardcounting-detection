@@ -184,3 +184,112 @@ class HILO:
             bet_size = self.bet_spread
         
         return max(1.0, min(self.bet_spread, bet_size))
+    
+    def _get_basic_strategy_action_v2(self, player_total, dealer_up_card, is_soft, can_split, can_double_surrender, true_count):
+        """Returns the basic strategy action for a given hand."""
+        
+        # --- Pair Splitting Logic ---
+        if can_split:
+            if is_soft:
+                pair_val = 11
+            else:
+                pair_val = player_total // 2
+            
+            if pair_val == 11: return 'P' # Always split Aces
+            if pair_val == 8: return 'P'  # Always split 8s
+            
+            if pair_val == 10: return 'S' # Never split 10s (Hard 20)
+            
+            if pair_val == 9: # 9s (Hard 18)
+                if dealer_up_card in [2, 3, 4, 5, 6, 8, 9]:
+                    return 'P'
+                return 'S' # Stand vs 7, 10, A
+            
+            if pair_val == 7: # 7s (Hard 14)
+                if dealer_up_card <= 7:
+                    return 'P'
+                # else, fall through to Hard 14 logic (Hit)
+            
+            if pair_val == 6: # 6s (Hard 12)
+                if dealer_up_card <= 6:
+                    return 'P'
+                # else, fall through to Hard 12 logic (Hit)
+            
+            if pair_val == 5: # 5s (Hard 10)
+                # Never split, fall through to Hard 10 logic (Double/Hit)
+                pass 
+            
+            if pair_val == 4: # 4s (Hard 8)
+                # Most strategies say Hit, some split vs 5, 6.
+                # We will follow "Hit" to keep it simple.
+                # Fall through to Hard 8 logic (Hit)
+                pass
+            
+            if pair_val in [2, 3]: # 2s, 3s
+                if dealer_up_card <= 7:
+                    return 'P'
+                # else, fall through to Hard 4/6 logic (Hit)
+        
+        # --- Standard Soft Hand Logic ---
+        if is_soft:
+            if player_total >= 19: return 'S'
+            if player_total == 18:
+                return 'S' if dealer_up_card <= 8 else 'H'
+            return 'H'
+        
+        # --- Standard Hard Hand Logic ---
+        if player_total >= 17: return 'S'
+        if 13 <= player_total <= 16 and dealer_up_card <= 6: return 'S'
+        if player_total == 12 and 4 <= dealer_up_card <= 6: return 'S'
+        
+        # --- Standard Double/Surrender Logic ---
+        if can_double_surrender:
+            if player_total == 11: return 'D'
+            if player_total == 10 and dealer_up_card <= 9: return 'D'
+            if player_total == 9 and 3 <= dealer_up_card <= 6: return 'D'
+            # Surrender (R) rules from original code
+            if player_total == 16 and dealer_up_card >= 9: return 'R'
+            if player_total == 15 and dealer_up_card == 10: return 'R'
+
+        return 'H'
+    
+    def predict_v2(self, player_total, dealer_up_card, is_soft, can_split, can_double_surrender, true_count):
+        """
+        Predicts the best action using Hi-Lo strategy deviations.
+        Falls back to basic strategy if no deviation is triggered.
+        """
+
+        # --- Hi-Lo Deviations (based on "Illustrious 18" + Splits) ---
+
+        # Pair-specific deviations (e.g., splitting 10s)
+        if can_split:
+            if player_total == 20:
+                if dealer_up_card == 5 and true_count >= 5: return 'P'
+                if dealer_up_card == 6 and true_count >= 4: return 'P'
+                # Note: No other common split deviations in I18
+                # Basic strategy for 10s is 'S', which will be
+                # caught by the fallback logic.
+
+        if player_total == 16 and dealer_up_card == 10 and true_count >= 0: return 'S'
+        if player_total == 15 and dealer_up_card == 10 and true_count >= 4: return 'S'
+        if player_total == 10 and dealer_up_card == 10 and true_count >= 4 or \
+            player_total == 11 and dealer_up_card == 11 and true_count >= 1 or \
+            player_total == 9 and dealer_up_card == 2 and true_count >= 1 or \
+            player_total == 10 and dealer_up_card == 11 and true_count >= 4 or \
+            player_total == 9 and dealer_up_card == 7 and true_count >= 3: 
+            if can_double_surrender:
+                return 'D'
+            else: 
+                return 'H'
+        if player_total == 12 and dealer_up_card == 3 and true_count >= 2: return 'S'
+        if player_total == 12 and dealer_up_card == 2 and true_count >= 3: return 'S'
+        if player_total == 16 and dealer_up_card == 9 and true_count >= 5: return 'S'
+        
+        if player_total == 15 and dealer_up_card == 9 and true_count >= 2: 
+            if can_double_surrender:
+                return 'R'
+            else:
+                return 'H'
+        
+        # --- Fallback to Basic Strategy ---
+        return self._get_basic_strategy_action_v2(player_total, dealer_up_card, is_soft, can_split, can_double_surrender, true_count)

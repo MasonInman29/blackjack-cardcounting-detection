@@ -419,7 +419,7 @@ if __name__ == "__main__":
     results_dict['Naive Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
-    # Basic Strategy model
+    # # Basic Strategy model
     model = BasicStrategyModel()
     print("\n\n------------------------------")
     print("Evaluating Basic Strategy model...")
@@ -427,19 +427,20 @@ if __name__ == "__main__":
     results_dict['Basic Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
-    # Hi-Lo model
-    model = HILO(num_decks=8, bet_spread=20)
+    # # Hi-Lo model
+    hilo_model = HILO(num_decks=8, bet_spread=20)
     print("\n\n------------------------------")
     print("Evaluating Hi-Lo model...")
-    accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    accuracy, average_ev = evaluate_model(hilo_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
     results_dict['Hi-Lo Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     # RL model
-    # model = RLModel(num_decks=8, bet_spread=20)
-    # model.load_model('blackjack_rl_model_10181738.pkl')
-    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # rl_model = RLModel(num_decks=8, bet_spread=20)
+    # rl_model.load_model('blackjack_rl_model_bet_size_only_shoe_2300000.pkl')
+    # rl_model.baseline_model = hilo_model
+    # accuracy, average_ev = evaluate_model(rl_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
     # results_dict['RL Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
-    
+            
     # Generate comparison plot
     print("\n\nGenerating model comparison plot...")
     plot_model_comparison(results_dict)

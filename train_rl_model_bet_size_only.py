@@ -155,14 +155,14 @@ class GameSimulator:
                             player_hands[hand_index] = {'hand': hand1, 'bet': current_bet, 'final_sa': None}
                             player_hands.insert(hand_index + 1, {'hand': hand2, 'bet': current_bet, 'final_sa': None})
                             
-                            if training_mode:
-                                # Update Q-table for the 'P' action.
-                                # Reward is 0. Next state is the state of the first new hand.
-                                # This is an approximation, but a common one.
-                                next_state = self.model._get_play_state(
-                                    hand1, dealer_up_card_val, self.get_remaining_cards(shoe)
-                                )
-                                self.model.update_play(play_state, action, 0.0, next_state, False)
+                            # if training_mode:
+                            #     # Update Q-table for the 'P' action.
+                            #     # Reward is 0. Next state is the state of the first new hand.
+                            #     # This is an approximation, but a common one.
+                            #     next_state = self.model._get_play_state(
+                            #         hand1, dealer_up_card_val, self.get_remaining_cards(shoe)
+                            #     )
+                            #     self.model.update_play(play_state, action, 0.0, next_state, False)
                             
                             # Restart action loop for the newly formed hand
                             current_hand = player_hands[hand_index]['hand']
@@ -183,8 +183,8 @@ class GameSimulator:
                             total_winnings += profit
                             hand_profit_for_bet_update += profit
                             
-                            if training_mode:
-                                self.model.update_play(play_state, action, reward, None, True)
+                            # if training_mode:
+                            #     self.model.update_play(play_state, action, reward, None, True)
                             
                             current_hand.clear() # Signal that hand is over
                             break
@@ -203,8 +203,8 @@ class GameSimulator:
                                 total_winnings += profit
                                 hand_profit_for_bet_update += profit
                                 
-                                if training_mode:
-                                    self.model.update_play(play_state, action, reward, None, True)
+                                # if training_mode:
+                                #     self.model.update_play(play_state, action, profit / bet_size, None, True)
                             
                             else:
                                 if training_mode:
@@ -226,17 +226,17 @@ class GameSimulator:
                             total_winnings += profit
                             hand_profit_for_bet_update += profit
                             
-                            if training_mode:
-                                self.model.update_play(play_state, action, reward, None, True)
+                            # if training_mode:
+                            #     self.model.update_play(play_state, action, reward, None, True)
                             break # Hand is over
-                        else:
+                        # else:
                             # --- Hit Successful ---
-                            if training_mode:
-                                # Update with 0 reward, provide next state
-                                next_state = self.model._get_play_state(
-                                    current_hand, dealer_up_card_val, self.get_remaining_cards(shoe)
-                                )
-                                self.model.update_play(play_state, action, 0.0, next_state, False)
+                            # if training_mode:
+                            #     # Update with 0 reward, provide next state
+                            #     next_state = self.model._get_play_state(
+                            #         current_hand, dealer_up_card_val, self.get_remaining_cards(shoe)
+                            #     )
+                            #     self.model.update_play(play_state, action, 0.0, next_state, False)
                             # Continue 'while True' loop for next action
                 
                 hand_index += 1
@@ -294,7 +294,7 @@ class GameSimulator:
                     # e.g., Stood and lost: profit=-bet_size. reward=-1.0
                     normalized_reward = final_profit / bet_size 
                     
-                    self.model.update_play(state, action, normalized_reward, None, True)
+                    # self.model.update_play(state, action, normalized_reward, None, True)
             
             # --- 4. Update Bet Q-Table (Once per initial hand) ---
             if training_mode:
@@ -345,14 +345,15 @@ if __name__ == '__main__':
     NUM_DECKS = 8
     DECK_PENETRATION = 6.5
     MAX_BET_SPREAD = 20
-    MODEL_FILE_PATH = "blackjack_rl_model_10182208.pkl"
+    MODEL_FILE_PATH = "blackjack_rl_model_bet_size_only_20x4_1e-6.pkl"
+    plot_filename = 'training_progress_bet_size_20x4_1e-6.png'
 
     TRAINING_SHOES = 5000000
-    EVALUATION_SHOES = 1000
+    EVALUATION_SHOES = 10000
     
     # How often to check progress during training
     PROGRESS_CHUNK_SIZE = 10000
-    PROGRESS_EVAL_SHOES = 1000
+    PROGRESS_EVAL_SHOES = 10000
     
     SAVE_INTERVAL = 100000
 
@@ -363,6 +364,8 @@ if __name__ == '__main__':
         epsilon_decay=0.99999885
     )
     baseline_model = HILO(num_decks=NUM_DECKS, bet_spread=MAX_BET_SPREAD)
+    rl_model.baseline_model = baseline_model
+    rl_model.initialize_q_table_from_hilo()
     
     simulator = GameSimulator(
         num_decks=NUM_DECKS,
@@ -387,6 +390,12 @@ if __name__ == '__main__':
             print(f"\n--- Training Progress Check at Shoe {i+1}/{TRAINING_SHOES} ---")
             print(f"Current Epsilon: {rl_model.epsilon:.4f}")
             
+            bet_q_table_keys = sorted(list(rl_model.bet_q_table.keys()))
+            print("Model bet table best actions:")
+            for _idx, bet_q_table_key in enumerate(bet_q_table_keys):
+                best_action = max(rl_model.bet_q_table[bet_q_table_key], key=rl_model.bet_q_table[bet_q_table_key].get)
+                delta_ev = float(rl_model.bet_q_table[bet_q_table_key][20.0]) - float(rl_model.bet_q_table[bet_q_table_key][1.0])
+                print(f"{bet_q_table_key}: {best_action}, {delta_ev:.7f}", end=';\t' if _idx % 5 != 4 else '\n')
             # Temporarily reduce epsilon for a more accurate evaluation of the current policy
             original_epsilon = rl_model.epsilon
             rl_model.epsilon = 0.0
@@ -411,20 +420,19 @@ if __name__ == '__main__':
             # Add a horizontal line for the baseline EV
             # plt.axhline(y=baseline_ev, color='r', linestyle='--', label=f'Baseline EV ({baseline_ev:.4f})')
             
-            plt.title('RL Model Training Progress vs. Baseline')
+            plt.title('RL Model Training Progress')
             plt.xlabel('Number of Training Shoes')
             plt.ylabel('Average Winnings (EV) per Shoe (units)')
             plt.grid(True)
             plt.legend()
             plt.tight_layout()
             
-            plot_filename = 'training_progress.png'
             plt.savefig(plot_filename)
             print(f"Plot saved as {plot_filename}")
             
             if (i + 1) % SAVE_INTERVAL == 0:
                 print(f"\n--- Saving Model at Shoe {i+1} ---")
-                cur_file_path = f"blackjack_rl_model_shoe_{i+1}.pkl"
+                cur_file_path = f"blackjack_rl_model_bet_size_only_shoe_{i+1}.pkl"
                 rl_model.save_model(cur_file_path)
 
     print("\n--- Training Complete ---")
@@ -464,14 +472,13 @@ if __name__ == '__main__':
         # Add a horizontal line for the baseline EV
         # plt.axhline(y=baseline_ev, color='r', linestyle='--', label=f'Baseline EV ({baseline_ev:.4f})')
         
-        plt.title('RL Model Training Progress vs. Baseline')
+        plt.title('RL Model Training Progress')
         plt.xlabel('Number of Training Shoes')
         plt.ylabel('Average Winnings (EV) per Shoe (units)')
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
         
-        plot_filename = 'training_progress.png'
         plt.savefig(plot_filename)
         print(f"Plot saved as {plot_filename}")
         plt.show()
