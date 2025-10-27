@@ -269,6 +269,40 @@ def plot_action_distribution(dataset, split='test'):
     ax.grid(axis='y', alpha=0.3)
     plt.tight_layout()
     save_figure(fig, f'action_distribution_{split}')
+    
+    
+def plot_predicted_action_distribution(predictions, split='test', model_name='Model'):
+    action_counts = pd.Series(predictions).value_counts()
+    
+    num_actions = len(action_counts)
+    width = max(8, num_actions * 2)
+    
+    fig, ax = plt.subplots(figsize=(width, 6))
+    colors = sns.color_palette("Set2", len(action_counts))
+    bars = ax.bar(action_counts.index, action_counts.values, 
+                 color=colors, alpha=0.8, edgecolor='black')
+    
+    ax.set_xlabel('Action', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Count', fontsize=12, fontweight='bold')
+    ax.set_title(f'{model_name} Predicted Action Distribution ({split.capitalize()} Set)', 
+                fontsize=14, fontweight='bold')
+    
+    # Auto-adjust y-axis
+    max_count = action_counts.max()
+    ax.set_ylim([0, max_count * 1.15])
+    
+    # Add percentage labels
+    total = action_counts.sum()
+    for bar in bars:
+        height = bar.get_height()
+        percentage = (height / total) * 100
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+               f'{int(height)}\n({percentage:.1f}%)', 
+               ha='center', va='bottom', fontweight='bold')
+    
+    ax.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+    save_figure(fig, f'action_distribution_{split}_{model_name}')
 
 
 def plot_ev_by_action(dataset, split='test'):
@@ -356,6 +390,7 @@ def calculate_accuracy(dataset, model, split_name='test'):
                          model.__class__.__name__)
     plot_accuracy_by_player_total(dataset, model, predictions, split=split_name,
                                   model_name=model.__class__.__name__)
+    plot_predicted_action_distribution(predictions, split=split_name, model_name=model.__class__.__name__)
     
     return accuracy
 
@@ -394,7 +429,7 @@ if __name__ == "__main__":
     # Load dataset
     dataset = ParquetDataset()
     
-    # dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=100, num_data_limit=1000) 
+    # dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=1000, num_data_limit=5000000) 
     # download 'blackjack_simulator.csv' from https://www.kaggle.com/datasets/dennisho/blackjack-hands/data
     # use a small num_data_limit for debugging.
     
@@ -412,19 +447,19 @@ if __name__ == "__main__":
 
     NUM_TEST_SIMS = 10000
     # Naive Strategy model
-    model = NaiveStrategy()
-    print("\n\n------------------------------")
-    print("Evaluating Naive Strategy model...")
-    accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    results_dict['Naive Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    # model = NaiveStrategy()
+    # print("\n\n------------------------------")
+    # print("Evaluating Naive Strategy model...")
+    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['Naive Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
     # # Basic Strategy model
-    model = BasicStrategyModel()
-    print("\n\n------------------------------")
-    print("Evaluating Basic Strategy model...")
-    accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    results_dict['Basic Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    # model = BasicStrategyModel()
+    # print("\n\n------------------------------")
+    # print("Evaluating Basic Strategy model...")
+    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['Basic Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
     # # Hi-Lo model

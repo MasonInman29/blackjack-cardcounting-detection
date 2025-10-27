@@ -345,8 +345,8 @@ if __name__ == '__main__':
     NUM_DECKS = 8
     DECK_PENETRATION = 6.5
     MAX_BET_SPREAD = 20
-    MODEL_FILE_PATH = "blackjack_rl_model_bet_size_only_20x4_1e-6.pkl"
-    plot_filename = 'training_progress_bet_size_20x4_1e-6.png'
+    MODEL_FILE_PATH = "blackjack_rl_model_bet_size_only_20x4_1e-8.pkl"
+    plot_filename = 'training_progress_bet_size_20x4_1e-8.png'
 
     TRAINING_SHOES = 5000000
     EVALUATION_SHOES = 10000
@@ -432,7 +432,7 @@ if __name__ == '__main__':
             
             if (i + 1) % SAVE_INTERVAL == 0:
                 print(f"\n--- Saving Model at Shoe {i+1} ---")
-                cur_file_path = f"blackjack_rl_model_bet_size_only_shoe_{i+1}.pkl"
+                cur_file_path = f"blackjack_rl_model_bet_size_only_20x4_1e-8_shoe_{i+1}.pkl"
                 rl_model.save_model(cur_file_path)
 
     print("\n--- Training Complete ---")
@@ -455,6 +455,7 @@ if __name__ == '__main__':
     print("\nEvaluating Trained RL Model...")
     eval_rl_model = RLModel(num_decks=NUM_DECKS)
     eval_rl_model.load_model(MODEL_FILE_PATH) # Loads and sets epsilon low
+    eval_rl_model.baseline_model = baseline_model
     simulator.set_model(eval_rl_model)
     rl_ev = simulator.run_multiple_simulations(
         num_games=EVALUATION_SHOES, 
