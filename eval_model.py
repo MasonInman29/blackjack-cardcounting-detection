@@ -428,7 +428,6 @@ def evaluate_model(model, dataset, game_simulator, num_simulations=100):
 if __name__ == "__main__":
     # Load dataset
     dataset = ParquetDataset()
-    
     # dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=1000, num_data_limit=5000000) 
     # download 'blackjack_simulator.csv' from https://www.kaggle.com/datasets/dennisho/blackjack-hands/data
     # use a small num_data_limit for debugging.
@@ -447,19 +446,19 @@ if __name__ == "__main__":
 
     NUM_TEST_SIMS = 10000
     # Naive Strategy model
-    # model = NaiveStrategy()
-    # print("\n\n------------------------------")
-    # print("Evaluating Naive Strategy model...")
-    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    # results_dict['Naive Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    model = NaiveStrategy()
+    print("\n\n------------------------------")
+    print("Evaluating Naive Strategy model...")
+    accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    results_dict['Naive Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
     # # Basic Strategy model
-    # model = BasicStrategyModel()
-    # print("\n\n------------------------------")
-    # print("Evaluating Basic Strategy model...")
-    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    # results_dict['Basic Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    model = BasicStrategyModel()
+    print("\n\n------------------------------")
+    print("Evaluating Basic Strategy model...")
+    accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    results_dict['Basic Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
     # # Hi-Lo model
@@ -470,12 +469,21 @@ if __name__ == "__main__":
     results_dict['Hi-Lo Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     # RL model
-    # rl_model = RLModel(num_decks=8, bet_spread=20)
-    # rl_model.load_model('blackjack_rl_model_bet_size_only_shoe_2300000.pkl')
-    # rl_model.baseline_model = hilo_model
-    # accuracy, average_ev = evaluate_model(rl_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    # results_dict['RL Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
-            
+    rl_model = RLModel(num_decks=8, bet_spread=20)
+    rl_model.load_model('blackjack_rl_model_bet_size_only_shoe_2300000.pkl')
+    rl_model.baseline_model = hilo_model
+    accuracy, average_ev = evaluate_model(rl_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    results_dict['RL Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+
+    from model.xgboost_policy import XGB_BlackJack
+    # xgb_path = "models/xgboost_model.model"  # the file you saved
+    xgb_model = XGB_BlackJack("models/xgboost_model.model", num_decks=8)
+
+    print("\n\n------------------------------")
+    print("Evaluating XGBoost policy...")
+    accuracy, average_ev = evaluate_model(xgb_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    results_dict['XGBoost Policy'] = {'accuracy': accuracy, 'ev': average_ev}
+
     # Generate comparison plot
     print("\n\nGenerating model comparison plot...")
     plot_model_comparison(results_dict)

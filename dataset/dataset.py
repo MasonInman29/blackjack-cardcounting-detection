@@ -445,8 +445,8 @@ class ParquetDataset:
     def __init__(self, nrows=None):
         print("Loading Dataset from Parquet...")
         
-        df = pd.read_parquet("blackjack_simulations.parquet")
-        
+        df = pd.read_parquet("blackjack_simulations.parquet", engine="pyarrow")
+        # print(df.columns)
         if nrows is not None:
             self.df = df.iloc[:nrows]
         else:
