@@ -1,3 +1,5 @@
+import sys
+sys.path.append('.')
 import pickle
 import pandas as pd
 from sklearn.pipeline import Pipeline
@@ -8,7 +10,7 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from Hit_By_Hit_Transformer import Hit_By_Hit_Transformer
 import numpy as np
 from dataset import GameSimulator
-from dataset.dataset import CSVDataset
+from dataset.dataset import CSVDataset, ParquetDataset
 from eval_model import evaluate_model
 
 
@@ -95,7 +97,7 @@ class SVM_BlackJack:
         return 1.0
 
 if __name__ == "__main__":
-    dataset = CSVDataset()
+    dataset = ParquetDataset(nrows=100000)
     train_X = dataset.get_split("train")
     train_y = train_X["best_action_by_ev"]
     test_X = dataset.get_split("test")
@@ -103,12 +105,14 @@ if __name__ == "__main__":
 
     print("Beginning Training")
     svm = SVM_BlackJack()
-    svm.fit(train_X, train_y)
-    print("Done Training")
+    # svm.fit(train_X, train_y, )
+    # print("Done Training")
 
-    filepath = "svm_2000sim_3000000samples.pkl"
-    with open(filepath, "wb") as file:
-        pickle.dump(svm, file)
+    filepath = "models/svm_100K_samples.pkl"
+    # with open(filepath, "wb") as file:
+    #     pickle.dump(svm, file)
+    with open(filepath, "rb") as file:
+        svm = pickle.load(file)
 
     game_simulator = GameSimulator()
-    evaluate_model(svm, dataset, game_simulator, num_simulations=1000)
+    evaluate_model(svm, dataset, game_simulator, num_simulations=10000)

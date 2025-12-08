@@ -212,3 +212,4 @@ figures/
 *.pkl
 *.parquet
 *.png
+*.pth

@@ -1,5 +1,5 @@
 from dataset import BlackjackDataset, GameSimulator, CSVDataset, ParquetDataset
-from model import NaiveStrategy, BasicStrategyModel, HILO, RLModel
+from model import NaiveStrategy, BasicStrategyModel, HILO, RLModel, RLModelDQN
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -8,19 +8,22 @@ import numpy as np
 from datetime import datetime
 import os
 from helper import get_hand_value
+from multiprocessing import Pool, cpu_count
+import multiprocessing as mp
+from functools import partial
 
 # Set style for plots
 sns.set_style("whitegrid")
 plt.rcParams['font.size'] = 11
 
-# Create output directory for figures
+
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_DIR = os.path.join('figures', TIMESTAMP)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def save_figure(fig, filename):
     """Helper to save figures into figures/<run_datetime>/<figurename>.png."""
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     filepath = os.path.join(OUTPUT_DIR, f"{filename}.png")
     fig.savefig(filepath, dpi=300, bbox_inches='tight')
     print(f"Saved figure: {filepath}")
@@ -338,94 +341,114 @@ def plot_ev_by_action(dataset, split='test'):
     
     plt.tight_layout()
     save_figure(fig, f'ev_by_action_{split}')
+    
+    
+def _predict_row(row, model):
+    """Worker to run model.predict on a dict-like row."""
+    return model.predict(
+        player_hand=row['initial_hand'],
+        dealer_up_card=row['dealer_up'],
+        remaining_cards=row['remaining_card_counts']
+    )
 
 
-def calculate_accuracy(dataset, model, split_name='test'):
+def _simulate_worker(seed, game_simulator):
+    """Worker to run one simulation with deterministic seeding."""
+    np.random.seed(seed)
+    return game_simulator.simulate_one_game()
+
+
+def calculate_accuracy(dataset, model, split_name='test', num_workers=None):
     """
-    Calculates the accuracy of a given model on a specified data split.
-
-    The model is expected to have a `predict` method that takes the player's
-    initial hand, the dealer's up card, and the remaining card counts as input,
-    and returns a single action ('H', 'S', 'D', 'R').
-
-    Args:
-        dataset (BlackjackDataset): The dataset object containing the data splits.
-        model: A model object with a `predict(player_hand, dealer_up_card, remaining_cards)` method.
-        split_name (str): The data split to evaluate on ('train', 'val', or 'test').
-
-    Returns:
-        float: The accuracy of the model on the specified split (0.0 to 1.0).
+    Multiprocessing-enhanced accuracy calculation.
+    (Plotting logic remains unchanged)
     """
     df_split = dataset.get_split(split_name)
     if df_split.empty:
         print(f"Warning: {split_name} split is empty. Returning 0 accuracy.")
         return 0.0
 
-    # Define a helper function to apply the model's prediction
-    def get_prediction(row):
-        return model.predict(
-            player_hand=row['initial_hand'],
-            dealer_up_card=row['dealer_up'],
-            remaining_cards=row['remaining_card_counts']
+    # Convert rows to python dicts — required for multiprocessing
+    rows = df_split.to_dict("records")
+
+    print(f"\n--- Evaluation on {split_name} split (multiprocessing) ---")
+
+    if num_workers is None:
+        # num_workers = cpu_count()
+        num_workers = 8  # Limit to 8 for most systems to avoid overload
+
+    # Run predictions in parallel
+    worker = partial(_predict_row, model=model)
+
+    with Pool(processes=num_workers) as pool:
+        predictions = list(
+            tqdm(pool.imap(worker, rows), 
+                 total=len(rows),
+                 desc=f"Generating predictions for '{split_name}' split...")
         )
 
-    print(f"\n--- Evaluation on {split_name} split ---")
-    # print(f"Generating predictions for '{split_name}' split...")
-    tqdm.pandas(desc=f"Generating predictions for '{split_name}' split...")
-    predictions = df_split.progress_apply(get_prediction, axis=1)
-
-    # Compare predictions to the optimal action determined by EV
-    correct_predictions = (predictions == df_split['best_action_by_ev']).sum()
+    # Evaluate accuracy
+    df_split["pred"] = predictions
+    correct_predictions = (df_split["pred"] == df_split["best_action_by_ev"]).sum()
     total_predictions = len(df_split)
-    
+
     if total_predictions == 0:
         print("No predictions were made.")
         return 0.0
 
     accuracy = correct_predictions / total_predictions
     print(f"Model accuracy: {accuracy:.4f} ({correct_predictions}/{total_predictions})")
-    
-    # Generate visualizations
-    plot_confusion_matrix(df_split['best_action_by_ev'], predictions, 
-                         model.__class__.__name__)
-    plot_accuracy_by_player_total(dataset, model, predictions, split=split_name,
-                                  model_name=model.__class__.__name__)
+
+    plot_confusion_matrix(df_split['best_action_by_ev'], predictions, model.__class__.__name__)
+    plot_accuracy_by_player_total(dataset, model, predictions, split=split_name, model_name=model.__class__.__name__)
     plot_predicted_action_distribution(predictions, split=split_name, model_name=model.__class__.__name__)
-    
+
     return accuracy
 
 
-def evaluate_model(model, dataset, game_simulator, num_simulations=100):
-    # Calculate accuracy on the test split
-    accuracy = calculate_accuracy(dataset, model, split_name='test')
-    
-    # Set the model in the game simulator
+def evaluate_model(model, dataset, game_simulator, num_simulations=100, num_workers=None):
+    """
+    Multiprocessing-enhanced model evaluation and simulation.
+    (Simulations stay in correct original order)
+    """
+    # Accuracy first (already parallelized)
+    accuracy = calculate_accuracy(dataset, model, split_name='test', num_workers=num_workers)
+
+    # Set the model in the simulator
     game_simulator.set_model(model)
-    
-    # Run simulations to calculate average EV
-    print(f"\nRunning {num_simulations} simulations...")
-    simulation_results = []
-    for i in tqdm(range(num_simulations), desc="Simulating Games"):
-        np.random.seed(i)
-        result = game_simulator.simulate_one_game()
-        simulation_results.append(result)
-    
+
+    print(f"\nRunning {num_simulations} simulations (multiprocessing)...")
+
+    # Seeds ensure reproducibility and preserve ordering
+    seeds = list(range(num_simulations))
+
+    if num_workers is None:
+        num_workers = cpu_count()
+
+    worker = partial(_simulate_worker, game_simulator=game_simulator)
+
+    with Pool(processes=num_workers) as pool:
+        simulation_results = list(
+            tqdm(pool.imap(worker, seeds),
+                 total=num_simulations,
+                 desc="Simulating Games")
+        )
+
+    # Compute EV
     average_ev = np.mean(simulation_results)
     print(f"Average EV: {average_ev:.4f} units/shoe")
-    
-    # Generate simulation visualizations
+
     plot_simulation_results(simulation_results, model.__class__.__name__)
-    
-    # Generate card counting visualizations if applicable
+
     if hasattr(model, '_get_true_count'):
         print("Generating card counting analysis...")
-        plot_true_count_analysis(game_simulator, model, model.__class__.__name__, 
-                                num_games=100)
-    
+        plot_true_count_analysis(game_simulator, model, model.__class__.__name__, num_games=100)
+
     return accuracy, average_ev
 
-
 if __name__ == "__main__":
+    mp.set_start_method("spawn", force=True)
+    
     # Load dataset
     dataset = ParquetDataset()
     # dataset = BlackjackDataset(csv_path='blackjack_simulator.csv', num_simulations=1000, num_data_limit=5000000) 
@@ -446,43 +469,50 @@ if __name__ == "__main__":
 
     NUM_TEST_SIMS = 10000
     # Naive Strategy model
-    model = NaiveStrategy()
-    print("\n\n------------------------------")
-    print("Evaluating Naive Strategy model...")
-    accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    results_dict['Naive Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    # model = NaiveStrategy()
+    # print("\n\n------------------------------")
+    # print("Evaluating Naive Strategy model...")
+    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['Naive Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
-    # # Basic Strategy model
-    model = BasicStrategyModel()
-    print("\n\n------------------------------")
-    print("Evaluating Basic Strategy model...")
-    accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    results_dict['Basic Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    # # # Basic Strategy model
+    # model = BasicStrategyModel()
+    # print("\n\n------------------------------")
+    # print("Evaluating Basic Strategy model...")
+    # accuracy, average_ev = evaluate_model(model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['Basic Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     
     # # Hi-Lo model
     hilo_model = HILO(num_decks=8, bet_spread=20)
-    print("\n\n------------------------------")
-    print("Evaluating Hi-Lo model...")
-    accuracy, average_ev = evaluate_model(hilo_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    results_dict['Hi-Lo Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    # print("\n\n------------------------------")
+    # print("Evaluating Hi-Lo model...")
+    # accuracy, average_ev = evaluate_model(hilo_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['Hi-Lo Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
     
     # RL model
     rl_model = RLModel(num_decks=8, bet_spread=20)
-    rl_model.load_model('blackjack_rl_model_bet_size_only_shoe_2300000.pkl')
+    rl_model.load_model('models/blackjack_rl_model_bet_size_only_shoe_2300000.pkl')
     rl_model.baseline_model = hilo_model
-    accuracy, average_ev = evaluate_model(rl_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # accuracy, average_ev = evaluate_model(rl_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['RL Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
+    
+    rl_model_dqn = RLModelDQN()
+    rl_model_dqn.load_model('models/play_network_supervised_v7_best.pth')
+    rl_model_dqn.epsilon = 0.0  # Disable exploration for evaluation
+    rl_model_dqn.original_rl_model = rl_model
+    accuracy, average_ev = evaluate_model(rl_model_dqn, dataset, game_simulator, num_simulations=NUM_TEST_SIMS, num_workers=8)
     results_dict['RL Strategy'] = {'accuracy': accuracy, 'ev': average_ev}
 
-    from model.xgboost_policy import XGB_BlackJack
-    # xgb_path = "models/xgboost_model.model"  # the file you saved
-    xgb_model = XGB_BlackJack("models/xgboost_model.model", num_decks=8)
+    # from model.xgboost_policy import XGB_BlackJack
+    # # xgb_path = "models/xgboost_model.model"  # the file you saved
+    # xgb_model = XGB_BlackJack("models/xgboost_model.model", num_decks=8)
 
-    print("\n\n------------------------------")
-    print("Evaluating XGBoost policy...")
-    accuracy, average_ev = evaluate_model(xgb_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
-    results_dict['XGBoost Policy'] = {'accuracy': accuracy, 'ev': average_ev}
+    # print("\n\n------------------------------")
+    # print("Evaluating XGBoost policy...")
+    # accuracy, average_ev = evaluate_model(xgb_model, dataset, game_simulator, num_simulations=NUM_TEST_SIMS)
+    # results_dict['XGBoost Policy'] = {'accuracy': accuracy, 'ev': average_ev}
 
     # Generate comparison plot
     print("\n\nGenerating model comparison plot...")
