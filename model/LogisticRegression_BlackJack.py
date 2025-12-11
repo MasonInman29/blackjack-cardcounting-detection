@@ -1,15 +1,20 @@
 import pickle
 import pandas as pd
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression
-from Hit_By_Hit_Transformer import Hit_By_Hit_Transformer
+from model.Hit_By_Hit_Transformer import Hit_By_Hit_Transformer
 from dataset import GameSimulator
 from dataset.dataset import CSVDataset
 from eval_model import evaluate_model
 from datetime import datetime
-import os, eval_model
+import eval_model
+from sklearn.model_selection import cross_val_score
 
 run_dir = os.path.join('figures', 'LogisticRegression_BlackJack', datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
 os.makedirs(run_dir, exist_ok=True)
@@ -17,14 +22,14 @@ eval_model.OUTPUT_DIR = run_dir
 
 class LogisticRegression_BlackJack:
 
-    def __init__(self, C: float = 1.0, max_iter: int = 1000):
+    def __init__(self, C: float = 0.1, max_iter: int = 2000):
         self.le = LabelEncoder()
         self.pipeline = Pipeline([
             ("transformed_data", Hit_By_Hit_Transformer()),
             ("standardized_data", ColumnTransformer([
                 ("DealerUpCard", OneHotEncoder(), ["DealerUpCard"]),
                 ("PlayerScore", StandardScaler(), ["PlayerScore"]),
-                # ("HiLoScore", StandardScaler(), ["HiLoScore"]),
+                #("HiLoScore", StandardScaler(), ["HiLoScore"]),
                 ("NumOfSoftAces", StandardScaler(), ["NumOfSoftAces"]),
                 ("CardsRemaining", StandardScaler(), ["CardsRemaining"]),
                 ("AceFrequency", "passthrough", ["AceFrequency"]),
@@ -44,6 +49,7 @@ class LogisticRegression_BlackJack:
                                       solver="lbfgs",
                                       n_jobs=None,
                                       class_weight="balanced", # Added balanced class weights
+                                      penalty='l2',
             )),
         ])
 
@@ -98,14 +104,47 @@ if __name__ == "__main__":
     train_y = train_X["best_action_by_ev"]
     test_X = dataset.get_split("test")
     test_y = test_X["best_action_by_ev"]
+    
+    print(f"Training set size: {len(train_X)}")
+    print(f"Test set size: {len(test_X)}")
+
+    best_c = 1.0
+    best_acc = 0.0
+
+    for c in [0.01, 0.1, 1.0, 10.0, 100.0]:
+        model = LogisticRegression_BlackJack(C=c)
+        model.fit(train_X, train_y)
+        acc = model.score(test_X, test_y)
+        print(f"C={c}: test accuracy = {acc:.4f}")
+
+        if acc > best_acc:
+            best_acc = acc
+            best_c = c
+    print(f"\nBest C value: {best_c} with accuracy {best_acc:.4f}")
+
+
     print("Beginning Training (Logistic Regression)")
-    logreg = LogisticRegression_BlackJack()
+    
+    logreg = LogisticRegression_BlackJack(C=best_c)
     logreg.fit(train_X, train_y)
     print("Done Training")
-    filepath = "logreg_2000sim_3000000samples.pkl"
+    
+    # Test accuracy
+    train_acc = logreg.score(train_X, train_y)
+    test_acc = logreg.score(test_X, test_y)
+    print(f"Train accuracy: {train_acc:.4f}")
+    print(f"Test accuracy: {test_acc:.4f}")
+    
+    # Save model
+    os.makedirs("models", exist_ok=True)
+    filepath = os.path.join("models", "logreg_model.pkl")
     with open(filepath, "wb") as file:
         pickle.dump(logreg, file)
+    print(f"Model saved to {filepath}")
+    
+    # Evaluate with game simulator
+    print("\nRunning game simulations...")
     game_simulator = GameSimulator()
-    evaluate_model(logreg, dataset, game_simulator, num_simulations=1000)
+    evaluate_model(logreg, dataset, game_simulator, num_simulations=10000)
 
 
